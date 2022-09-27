@@ -55,5 +55,5 @@ def main():
         print(os.path.join(args.input_path, filename))
         cleanup_mod(os.path.join(args.input_path, filename), os.path.join(args.output_path, filename), args.compression)
 
-
-main()
+if __name__ == '__main__':
+    main()
