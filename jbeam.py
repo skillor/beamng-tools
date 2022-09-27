@@ -1,15 +1,37 @@
-import json
 import math
 import random
+import re
+
+try:
+    import ujson as json  # Speedup if present; no big deal if not
+except ImportError:
+    import json
 
 
-class JSONWithCommentsDecoder(json.JSONDecoder):
-    def __init__(self, **kw):
-        super().__init__(**kw)
+def remove_comments(json_like):
+    comments_re = re.compile(
+        r'//.*?$|/\*.*?\*/|\'(?:\\.|[^\\\'])*\'|"(?:\\.|[^\\"])*"',
+        re.DOTALL | re.MULTILINE
+    )
 
-    def decode(self, s):
-        s = '\n'.join(l for l in s.split('\n') if not l.lstrip(' ').startswith('//'))
-        return super().decode(s)
+    def replacer(match):
+        s = match.group(0)
+        if s[0] == '/':
+            return ""
+        return s
+
+    return comments_re.sub(replacer, json_like)
+
+
+def remove_trailing_commas(json_like):
+    trailing_object_commas_re = re.compile(
+        r'(,)\s*}(?=([^"\\]*(\\.|"([^"\\]*\\.)*[^"\\]*"))*[^"]*$)')
+    trailing_array_commas_re = re.compile(
+        r'(,)\s*\](?=([^"\\]*(\\.|"([^"\\]*\\.)*[^"\\]*"))*[^"]*$)')
+    # Fix objects {} first
+    objects_fixed = trailing_object_commas_re.sub("}", json_like)
+    # Now fix arrays/lists [] and return the result
+    return trailing_array_commas_re.sub("]", objects_fixed)
 
 
 PERSISTENT_ID_CHARS = '0123456789abcdef'
@@ -36,11 +58,13 @@ class Jbeam:
 
 
 def load(s: str):
+    s = remove_comments(s)
+    s = remove_trailing_commas(s)
     try:
-        return Jbeam([json.loads(s, cls=JSONWithCommentsDecoder)])
+        return Jbeam([json.loads(s)])
     except json.JSONDecodeError:
         pass
-    return Jbeam([json.loads(line, cls=JSONWithCommentsDecoder) for line in s.splitlines(False)])
+    return Jbeam([json.loads(line) for line in s.splitlines(False)])
 
 
 if __name__ == '__main__':

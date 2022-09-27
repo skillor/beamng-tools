@@ -58,17 +58,24 @@ def main():
     base_map_name = 'allmap'
 
     merge_maps = [
+        # {
+        #     'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\automation_test_track.zip',
+        #     'name': 'automation_test_track',
+        #     'pos': [0, 0, 0],
+        # },
         {
-            'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\automation_test_track.zip',
-            'name': 'automation_test_track',
-            'pos': [0, 0, 0],
+            'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\west_coast_usa.zip',
+            'name': 'west_coast_usa',
+            'pos': [0, 2000, 0],
         },
         {
             'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\Cliff.zip',
             'name': 'Cliff',
             'pos': [0, 4000, 0],
-        }
+        },
     ]
+
+    has_terrain = False
 
     main_json = jbeam.Jbeam()
 
@@ -76,13 +83,15 @@ def main():
     for merge_map in merge_maps:
         f.reset()
 
-        main_name = merge_map['name'] + '_map'
+        map_prefix = merge_map['name'] + '_'
+        main_name = map_prefix + 'map'
 
         main_json.lines.append({
             "name": main_name,
             "class": "SimGroup",
             "persistentId": jbeam.create_persistent_id(),
-            "__parent": "maps"})
+            "__parent": "maps",
+        })
 
         if 'file' in merge_map:
             f.load_zip(merge_map['file'])
@@ -105,20 +114,51 @@ def main():
 
             # is main object
             if norm_filename.startswith(mission_group_str):
+
+                new_filepath = norm_filename[len(mission_group_str):]
+                new_dir_path = os.path.dirname(new_filepath)
+                if new_dir_path != '':
+                    new_dir_path = os.sep.join(map(lambda x: map_prefix + x, new_dir_path.split(os.sep)))
+                    new_filepath = os.path.join(new_dir_path, os.path.basename(new_filepath))
+
                 j = jbeam.load(f.read_file(filename).decode('utf-8'))
-                for line in j.lines:
+                for i in reversed(range(len(j.lines))):
+                    line = j.lines[i]
+
+                    if line['class'] == 'TerrainBlock':
+                        if has_terrain:
+                            j.lines.pop(i)
+                            continue
+                        else:
+                            has_terrain = True
+
+                    if line['class'] not in ['SimGroup', 'WaterPlane'] and 'position' not in line:
+                        line['position'] = [0, 0, 0]
                     if 'position' in line:
                         line['position'][0] += merge_map['pos'][0]
                         line['position'][1] += merge_map['pos'][1]
                         line['position'][2] += merge_map['pos'][2]
-                    if '__parent' in line and line['__parent'] == 'MissionGroup':
-                        line['__parent'] = main_name
+
+                    if 'nodes' in line:
+                        for i in range(len(line['nodes'])):
+                            line['nodes'][i][0] += merge_map['pos'][0]
+                            line['nodes'][i][1] += merge_map['pos'][1]
+                            line['nodes'][i][2] += merge_map['pos'][2]
+
+                    if '__parent' in line:
+                        if line['__parent'] == 'MissionGroup':
+                            line['__parent'] = main_name
+                        else:
+                            line['__parent'] = map_prefix + line['__parent']
+                    if 'name' in line:
+                        line['name'] = map_prefix + line['name']
+
                 f.write_file(filename, j.tostring().encode('utf-8'))
 
                 f.save_file(
                     filename,
                     os.path.join(base_map_path, 'levels', base_map_name, 'main', 'MissionGroup', 'maps', main_name),
-                    norm_filename[len(mission_group_str):],
+                    new_filepath,
                 )
 
             # is materials file
@@ -142,6 +182,13 @@ def main():
 
             # forest data
             elif norm_filename.endswith(forest_str) or norm_filename.endswith(forestbrushes_str):
+                j = jbeam.load(f.read_file(filename).decode('utf-8'))
+                for line in j.lines:
+                    if 'pos' in line:
+                        line['pos'][0] += merge_map['pos'][0]
+                        line['pos'][1] += merge_map['pos'][1]
+                        line['pos'][2] += merge_map['pos'][2]
+                f.write_file(filename, j.tostring().encode('utf-8'))
                 f.save_file(
                     filename,
                     new_forest_folder,
