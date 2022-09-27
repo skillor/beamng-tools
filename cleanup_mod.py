@@ -36,7 +36,7 @@ def cleanup_mod(input_file, output_file, compression_level=9):
             print(file_base, file_extension)
             f.delete_file(filename)
 
-    f.save_zip(output_file)
+    f.save_zip(output_file, compression_level=compression_level)
 
 
 def main():
