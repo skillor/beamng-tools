@@ -2,6 +2,7 @@ import os
 
 import jbeam
 from file_manager import FileManager
+from terrain import Terrain
 import ntpath
 
 ALLOWED_EXTENSIONS = [
@@ -57,27 +58,34 @@ def main():
     base_map_path = r'C:\Users\jack-\AppData\Local\BeamNG.drive\0.26\mods\unpacked\allmap'
     base_map_name = 'allmap'
 
+    objects_path = ('main', 'MissionGroup')
+
     merge_maps = [
         # {
         #     'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\automation_test_track.zip',
         #     'name': 'automation_test_track',
         #     'pos': [0, 0, 0],
         # },
-        {
-            'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\west_coast_usa.zip',
-            'name': 'west_coast_usa',
-            'pos': [0, 2000, 0],
-        },
+        # {
+        #     'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\west_coast_usa.zip',
+        #     'name': 'west_coast_usa',
+        #     'pos': [0, 2000, 0],
+        # },
         {
             'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\Cliff.zip',
             'name': 'Cliff',
-            'pos': [0, 4000, 0],
+            'pos': [0, 0, 0],
+        },
+        {
+            'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\east_coast_usa.zip',
+            'name': 'east_coast_usa',
+            'pos': [0, 0, 0],
         },
     ]
 
-    has_terrain = False
-
     main_json = jbeam.Jbeam()
+
+    terrain = None
 
     f = FileManager()
     for merge_map in merge_maps:
@@ -90,7 +98,7 @@ def main():
             "name": main_name,
             "class": "SimGroup",
             "persistentId": jbeam.create_persistent_id(),
-            "__parent": "maps",
+            "__parent": objects_path[-1],
         })
 
         if 'file' in merge_map:
@@ -108,7 +116,7 @@ def main():
             norm_filename = ntpath.normpath(filename)
 
             map_str = os.path.join('levels', merge_map['name'] + os.sep)
-            mission_group_str = os.path.join(map_str, 'main', 'MissionGroup' + os.sep)
+            mission_group_str = os.path.join(map_str, *objects_path) + os.sep
 
             forest_managed_data_str = os.path.join(map_str, 'art', 'forest', 'managedItemData.cs')
 
@@ -125,19 +133,39 @@ def main():
                 for i in reversed(range(len(j.lines))):
                     line = j.lines[i]
 
-                    if line['class'] == 'TerrainBlock':
-                        if has_terrain:
-                            j.lines.pop(i)
-                            continue
-                        else:
-                            has_terrain = True
-
                     if line['class'] not in ['SimGroup', 'WaterPlane'] and 'position' not in line:
                         line['position'] = [0, 0, 0]
                     if 'position' in line:
                         line['position'][0] += merge_map['pos'][0]
                         line['position'][1] += merge_map['pos'][1]
                         line['position'][2] += merge_map['pos'][2]
+
+                    if line['class'] == 'TerrainBlock':
+                        tf = line['terrainFile']
+                        if tf[0] == '/':
+                            tf = tf[1:]
+
+                        kwargs = {}
+                        if 'position' in line:
+                            kwargs['position'] = line['position']
+                        if 'squareSize' in line:
+                            kwargs['square_size'] = line['squareSize']
+                        if 'maxHeight' in line:
+                            kwargs['max_height'] = line['maxHeight']
+                        if terrain is None:
+                            terrain = Terrain().load(
+                                f.get_file_content(tf),
+                                **kwargs
+                            )
+                        else:
+                            terrain = terrain.merge(
+                                Terrain().load(
+                                    f.get_file_content(tf),
+                                    **kwargs
+                                ),
+                            )
+
+                        del j.lines[i]
 
                     if 'nodes' in line:
                         for i in range(len(line['nodes'])):
@@ -157,7 +185,7 @@ def main():
 
                 f.save_file(
                     filename,
-                    os.path.join(base_map_path, 'levels', base_map_name, 'main', 'MissionGroup', 'maps', main_name),
+                    os.path.join(base_map_path, 'levels', base_map_name, *objects_path, main_name),
                     new_filepath,
                 )
 
@@ -196,9 +224,31 @@ def main():
                 )
 
     f.reset()
-    main_path = os.path.join('main', 'MissionGroup', 'maps', 'items.level.json')
-    f.write_file(main_path, main_json.tostring().encode('utf-8'))
 
+    terrain_path = 'levels/' + base_map_name + '/theTerrain.ter'
+
+    main_json.lines.append({
+        "name": "theTerrain",
+        "class": "TerrainBlock",
+        "persistentId": jbeam.create_persistent_id(),
+        "__parent": objects_path[-1],
+        "position": terrain.position,
+        "squareSize": terrain.square_size,
+        "maxHeight": terrain.max_height,
+        "baseTexSize": terrain.size,
+        "terrainFile": terrain_path,
+    })
+
+    f.write_file(terrain_path, terrain.data)
+    f.save_file(
+        terrain_path,
+        base_map_path,
+        terrain_path
+    )
+
+    main_path = os.path.join(*objects_path, 'items.level.json')
+
+    f.write_file(main_path, main_json.tostring().encode('utf-8'))
     f.save_file(
         main_path,
         os.path.join(base_map_path, 'levels', base_map_name),
