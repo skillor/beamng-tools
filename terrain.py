@@ -75,14 +75,14 @@ class Terrain:
         return self.data
 
     @staticmethod
-    def merge(terrain1: 'Terrain', terrain2: 'Terrain', downscale=True) -> 'Terrain':
+    def merge(terrain1: 'Terrain', terrain2: 'Terrain', downscale=1) -> 'Terrain':
         t = Terrain()
         t.position = [min(terrain1.position[i], terrain2.position[i]) for i in range(3)]
         terrain1_new_position = [terrain1.position[i] - t.position[i] for i in range(3)]
         terrain2_new_position = [terrain2.position[i] - t.position[i] for i in range(3)]
 
-        if downscale:
-            t.square_size = 1
+        if downscale > 0:
+            t.square_size = downscale
         else:
             t.square_size = min(terrain1.square_size, terrain2.square_size)
 
@@ -95,8 +95,10 @@ class Terrain:
             terrain1_new_position[1] + terrain1_norm_size,
             terrain2_new_position[0] + terrain2_norm_size,
             terrain2_new_position[1] + terrain2_norm_size,
-        ) * t.square_size)
+        ) * (1 / t.square_size))
+
         t.size = 1 << (t.size - 1).bit_length()
+
         t.max_height = max(
             terrain1_new_position[2] + terrain1.max_height,
             terrain2_new_position[2] + terrain2.max_height,

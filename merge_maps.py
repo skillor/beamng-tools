@@ -1,4 +1,5 @@
 import os
+import re
 
 import jbeam
 from file_manager import FileManager
@@ -92,7 +93,7 @@ def main():
         # },
         {
             'name': 'east_coast_usa',
-            'pos': [4096, 0, 71],
+            'pos': [3072, 0, 71],
         },
         # {
         #     'name': 'gridmap_v2',
@@ -106,10 +107,10 @@ def main():
         #     'name': 'Industrial',
         #     'pos': [0, 0, 0],
         # },
-        # {
-        #     'name': 'italy',
-        #     'pos': [0, 0, 0],
-        # },
+        {
+            'name': 'italy',
+            'pos': [0, 0, -100],
+        },
         # {
         #     'name': 'jungle_rock_island',
         #     'pos': [0, 0, 0],
@@ -120,21 +121,34 @@ def main():
         # },
         # {
         #     'name': 'Utah',
-        #     'pos': [0, 0, 0],
+        #     'pos': [2048, 0, 0],
         # },
-        {
-            'name': 'west_coast_usa',
-            'pos': [-0.5, -0.5, 0],
-        },
+        # {
+        #     'name': 'west_coast_usa',
+        #     'pos': [-0.5, -0.5, 0],
+        # },
     ]
 
     base_tex_size = [2048, 2048]
+    detail_tex_size = [1024, 1024]
+    macro_tex_size = [1024, 1024]
 
     build_new_terrain = True
+    downscale_terrain = 4
 
     main_json = jbeam.Jbeam()
 
     terrain = None
+
+    main_decal_json = jbeam.Jbeam()
+    main_decal_json.lines.append({
+        "header": {
+            "name": "DecalData File",
+            "comments": "// Instances format: rectIdx, size, renderPriority, position.x, position.y, position.z, normal.x, normal.y, normal.z, tangent.x, tangent.y, tangent.z",
+            "version": 1
+        },
+        "instances": {}
+    })
 
     f = FileManager()
     for merge_map in merge_maps:
@@ -166,16 +180,18 @@ def main():
         forest_str = 'forest4.json'
         forestbrushes_str = 'forestbrushes4.json'
 
+        map_str = os.path.join('levels', merge_map['name'] + os.sep)
+        mission_group_str = os.path.join(map_str, *objects_path) + os.sep
+
+        forest_managed_data_str = os.path.join(map_str, 'art', 'forest', 'managedItemData.cs')
+        decal_managed_data_str = os.path.join(map_str, 'art', 'decals', 'managedDecalData.cs')
+        main_decal_str = os.path.join(map_str, 'main.decals.json')
+
         new_art_folder = os.path.join(base_map_path, 'levels', base_map_name, 'art', merge_map['name'])
         new_forest_folder = os.path.join(base_map_path, 'levels', base_map_name, 'forest', merge_map['name'])
 
         for filename in f.files.keys():
             norm_filename = ntpath.normpath(filename)
-
-            map_str = os.path.join('levels', merge_map['name'] + os.sep)
-            mission_group_str = os.path.join(map_str, *objects_path) + os.sep
-
-            forest_managed_data_str = os.path.join(map_str, 'art', 'forest', 'managedItemData.cs')
 
             # is main object
             if norm_filename.startswith(mission_group_str):
@@ -221,7 +237,7 @@ def main():
                                     f.get_file_content(tf),
                                     **kwargs
                                 ),
-                                downscale=True,
+                                downscale=downscale_terrain,
                             )
 
                         del j.lines[i]
@@ -256,7 +272,16 @@ def main():
                     if build_new_terrain:
                         for k, v in j.lines[i].items():
                             if 'class' in v and v['class'] == 'TerrainMaterialTextureSet':
-                                print(v)
+                                if 'detailTexSize' in v and (
+                                        v['detailTexSize'][0] != detail_tex_size[0]
+                                        or v['detailTexSize'][1] != detail_tex_size[1]
+                                ):
+                                    print('detailTexSize does not match', v)
+                                if 'macroTexSize' in v and (
+                                        v['macroTexSize'][0] != macro_tex_size[0]
+                                        or v['macroTexSize'][1] != macro_tex_size[1]
+                                ):
+                                    print('macroTexSize does not match', v)
                             for base_tex_name in [
                                 'aoBaseTex',
                                 'baseColorBaseTex',
@@ -299,7 +324,7 @@ def main():
                             for name_value in [
                                 # 'name',
                                 'internalName',
-                                'annotation',
+                                # 'annotation',
                                 # 'groundmodelName',
                                 # 'groundType',
                             ]:
@@ -311,6 +336,27 @@ def main():
                     new_art_folder,
                     norm_filename[len(map_str):],
                 )
+
+            # is decal managed data
+            elif norm_filename == decal_managed_data_str:
+                f.write_file(
+                    filename,
+                    re.sub(
+                        r' DecalData\(([^)]*)\)',
+                        ' DecalData(' + map_prefix + r'\1)',
+                        f.read_file(filename).decode('utf-8')
+                    ).encode('utf-8')
+                )
+                f.save_file(
+                    filename,
+                    new_art_folder,
+                    norm_filename[len(map_str):],
+                )
+
+            # is main decal
+            elif norm_filename == main_decal_str:
+                for k, v in jbeam.load(f.read_file(filename).decode('utf-8')).lines[0]['instances'].items():
+                    main_decal_json.lines[0]['instances'][map_prefix + k] = v
 
             # is forest managed data
             elif norm_filename == forest_managed_data_str:
@@ -342,20 +388,14 @@ def main():
 
         terrain_texture_set_json = jbeam.Jbeam()
         terrain_texture_set_json.lines.append({
-                terrain_texture_set_name: {
-                    "name": terrain_texture_set_name,
-                    "class": "TerrainMaterialTextureSet",
-                    "persistentId": jbeam.create_persistent_id(),
-                    "baseTexSize": base_tex_size,
-                    "detailTexSize": [
-                        1024,
-                        1024,
-                    ],
-                    "macroTexSize": [
-                        1024,
-                        1024,
-                    ]
-                },
+            terrain_texture_set_name: {
+                "name": terrain_texture_set_name,
+                "class": "TerrainMaterialTextureSet",
+                "persistentId": jbeam.create_persistent_id(),
+                "baseTexSize": base_tex_size,
+                "detailTexSize": detail_tex_size,
+                "macroTexSize": macro_tex_size,
+            },
         })
 
         terrain_texture_set_json_path = 'art/main.materials.json'
@@ -378,7 +418,7 @@ def main():
             "position": terrain.position,
             "squareSize": terrain.square_size,
             "maxHeight": terrain.max_height,
-            "baseTexSize": terrain.max_height,
+            "baseTexSize": terrain.size,
             "terrainFile": '/' + terrain_path,
         })
 
@@ -398,6 +438,15 @@ def main():
         main_path,
         os.path.join(base_map_path, 'levels', base_map_name),
         main_path,
+    )
+
+    main_decals_path = 'main.decals.json'
+
+    f.write_file(main_decals_path, main_decal_json.tostring().encode('utf-8'))
+    f.save_file(
+        main_decals_path,
+        os.path.join(base_map_path, 'levels', base_map_name),
+        main_decals_path,
     )
 
 
