@@ -27,7 +27,16 @@ class FileManager:
         self.files[file] = (base_path, file)
 
     def read_file(self, filename):
-        f = self.files[filename]
+        f = None
+        if filename in self.files:
+            f = self.files[filename]
+        else:
+            filename_lower = filename.lower()
+            for s_filename in self.files.keys():
+                if s_filename.lower() == filename_lower:
+                    f = self.files[s_filename]
+            if f is None:
+                raise FileNotFoundError('{} not found'.format(filename))
         if isinstance(f[0], str):
             with open(os.path.join(f[0], f[1]), 'rb') as fh:
                 return fh.read()

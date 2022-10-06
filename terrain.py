@@ -1,6 +1,8 @@
 import math
 import struct
 
+MAX_HEIGHT_BYTES = 65535
+
 
 class Terrain:
     byte_read_offset = 0
@@ -24,8 +26,11 @@ class Terrain:
              data,
              position=(0, 0, 0),
              square_size=1,
-             max_height=None):
-        print(position, square_size, max_height)
+             max_height=None,
+             layer_names_prefix=''):
+        if position[0] % 1 != 0 or position[1] % 1 != 0:
+            raise RuntimeError('uneven position not possible: {}'.format(position))
+
         self.data = data
         self.position = position
         self.square_size = square_size
@@ -36,6 +41,9 @@ class Terrain:
             self.max_height = self.size
         else:
             self.max_height = max_height
+
+        print(position, square_size, max_height, self.size)
+
         square = self.size * self.size
         self.layers = [
             self.load_ushort_array(square),  # height map
@@ -45,7 +53,7 @@ class Terrain:
             self.load_byte_array(square),
             self.load_byte_array(square),
         ]
-        self.layer_names = self.load_string_list()
+        self.layer_names = [layer_names_prefix + x for x in self.load_string_list()]
         return self
 
     def save(self):
@@ -66,26 +74,33 @@ class Terrain:
         self.data = struct.pack(data_struct, *data)
         return self.data
 
-    def merge(self, terrain2: 'Terrain'):
+    @staticmethod
+    def merge(terrain1: 'Terrain', terrain2: 'Terrain', downscale=True) -> 'Terrain':
         t = Terrain()
-        t.position = [min(self.position[i], terrain2.position[i]) for i in range(3)]
-        self_new_position = [self.position[i] - t.position[i] for i in range(3)]
+        t.position = [min(terrain1.position[i], terrain2.position[i]) for i in range(3)]
+        terrain1_new_position = [terrain1.position[i] - t.position[i] for i in range(3)]
         terrain2_new_position = [terrain2.position[i] - t.position[i] for i in range(3)]
 
-        if self_new_position[2] != terrain2_new_position[2]:
-            raise RuntimeError('merging heights not implemented yet')
+        if downscale:
+            t.square_size = 1
+        else:
+            t.square_size = min(terrain1.square_size, terrain2.square_size)
 
-        t.version = self.version
+        terrain1_norm_size = terrain1.size * terrain1.square_size
+        terrain2_norm_size = terrain2.size * terrain2.square_size
+
+        t.version = terrain1.version
         t.size = math.ceil(max(
-            self_new_position[0] + self.size,
-            self_new_position[1] + self.size,
-            terrain2_new_position[0] + terrain2.size,
-            terrain2_new_position[1] + terrain2.size,
-        ))
+            terrain1_new_position[0] + terrain1_norm_size,
+            terrain1_new_position[1] + terrain1_norm_size,
+            terrain2_new_position[0] + terrain2_norm_size,
+            terrain2_new_position[1] + terrain2_norm_size,
+        ) * t.square_size)
         t.size = 1 << (t.size - 1).bit_length()
         t.max_height = t.size
         new_square = t.size * t.size
-        t.layer_names = self.layer_names + terrain2.layer_names
+
+        t.layer_names = terrain1.layer_names + terrain2.layer_names
 
         picked = [-1] * new_square
 
@@ -96,24 +111,38 @@ class Terrain:
         t.layers[4] = [0] * new_square
         t.layers[5] = [0] * new_square
 
-        self_height_adjust = self.max_height / t.max_height
-        for y in range(self.size):
-            for x in range(self.size):
+        terrain1_height_adjust = terrain1.max_height / t.max_height
+        terrain1_height_offset = (terrain1_new_position[2] / t.max_height) * MAX_HEIGHT_BYTES
+        terrain1_square_size_adjust = terrain1.square_size / t.square_size
+        terrain1_square_size_adjust_rep = 1 / terrain1_square_size_adjust
+
+        for y in range(int(terrain1.size * terrain1_square_size_adjust)):
+            for x in range(int(terrain1.size * terrain1_square_size_adjust)):
                 i = int(
-                    (y + self_new_position[1]) * t.size +
-                    x + self_new_position[0]
+                    (y + terrain1_new_position[1]) * t.size +
+                    (x + terrain1_new_position[0])
                 )
-                t.layers[0][i] = int(self.layers[0][y * self.size + x] * self_height_adjust)
+                t.layers[0][i] = int(terrain1.layers[0][int(
+                    y * terrain1.size * terrain1_square_size_adjust_rep
+                    + x * terrain1_square_size_adjust_rep
+                )] * terrain1_height_adjust + terrain1_height_offset)
                 picked[i] = 0
 
         terrain2_height_adjust = terrain2.max_height / t.max_height
-        for y in range(terrain2.size):
-            for x in range(terrain2.size):
+        terrain2_height_offset = (terrain2_new_position[2] / t.max_height) * MAX_HEIGHT_BYTES
+        terrain2_square_size_adjust = terrain2.square_size / t.square_size
+        terrain2_square_size_adjust_rep = 1 / terrain2_square_size_adjust
+
+        for y in range(int(terrain2.size * terrain2_square_size_adjust)):
+            for x in range(int(terrain2.size * terrain2_square_size_adjust)):
                 i = int(
                     (y + terrain2_new_position[1]) * t.size +
-                    x + terrain2_new_position[0]
+                    (x + terrain2_new_position[0])
                 )
-                d = int(terrain2.layers[0][y * terrain2.size + x] * terrain2_height_adjust)
+                d = int(terrain2.layers[0][int(
+                    y * terrain2.size * terrain2_square_size_adjust_rep
+                    + x * terrain2_square_size_adjust_rep
+                )] * terrain2_height_adjust + terrain2_height_offset)
                 if d > t.layers[0][i]:
                     t.layers[0][i] = d
                     picked[i] = 1
@@ -124,26 +153,24 @@ class Terrain:
                 pick = picked[new_i]
                 if pick == 0:
                     old_i = int(
-                        (y - self_new_position[1]) * self.size +
-                        (x - self_new_position[0])
+                        (y - terrain1_new_position[1]) * terrain1.size * terrain1_square_size_adjust_rep +
+                        (x - terrain1_new_position[0]) * terrain1_square_size_adjust_rep
                     )
-                    t.layers[1][new_i] = self.layers[1][old_i]
-                    t.layers[2][new_i] = self.layers[2][old_i]
-                    t.layers[3][new_i] = self.layers[3][old_i]
-                    t.layers[4][new_i] = self.layers[4][old_i]
-                    t.layers[5][new_i] = self.layers[5][old_i]
+                    t.layers[1][new_i] = terrain1.layers[1][old_i]
+                    t.layers[2][new_i] = terrain1.layers[2][old_i]
+                    t.layers[3][new_i] = terrain1.layers[3][old_i]
+                    t.layers[4][new_i] = terrain1.layers[4][old_i]
+                    t.layers[5][new_i] = terrain1.layers[5][old_i]
                 elif pick == 1:
                     old_i = int(
-                        (y - terrain2_new_position[1]) * terrain2.size +
-                        (x - terrain2_new_position[0])
+                        (y - terrain2_new_position[1]) * terrain2.size * terrain2_square_size_adjust_rep +
+                        (x - terrain2_new_position[0]) * terrain2_square_size_adjust_rep
                     )
-                    t.layers[1][new_i] = terrain2.layers[1][old_i] + len(self.layer_names)
-                    t.layers[2][new_i] = terrain2.layers[2][old_i] + len(self.layer_names)
-                    t.layers[3][new_i] = terrain2.layers[3][old_i]
-                    t.layers[4][new_i] = terrain2.layers[4][old_i]
-                    t.layers[5][new_i] = terrain2.layers[5][old_i]
-
-        t.save()
+                    t.layers[1][new_i] = min(255, terrain2.layers[1][old_i] + len(terrain1.layer_names))
+                    t.layers[2][new_i] = terrain2.layers[2][old_i]# + len(terrain1.layer_names)
+                    t.layers[3][new_i] = terrain2.layers[3][old_i]# + len(terrain1.layer_names)
+                    t.layers[4][new_i] = terrain2.layers[4][old_i]# + len(terrain1.layer_names)
+                    t.layers[5][new_i] = terrain2.layers[5][old_i]# + len(terrain1.layer_names)
 
         return t
 
@@ -181,10 +208,14 @@ class Terrain:
         return t
 
 
-if __name__ == '__main__':
+def main():
     t = Terrain()
     with open(
             r'C:\Users\jack-\AppData\Local\BeamNG.drive\0.26\mods\unpacked\americanroad\levels\mymap\terenia24.ter',
             'rb'
     ) as f:
         t.load(f.read())
+
+
+if __name__ == '__main__':
+    main()

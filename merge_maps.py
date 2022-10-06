@@ -58,29 +58,59 @@ def main():
     base_map_path = r'C:\Users\jack-\AppData\Local\BeamNG.drive\0.26\mods\unpacked\allmap'
     base_map_name = 'allmap'
 
+    base_file_path = r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels'
+
     objects_path = ('main', 'MissionGroup')
 
     merge_maps = [
         # {
-        #     'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\automation_test_track.zip',
         #     'name': 'automation_test_track',
+        #     'pos': [-0.25, -0.25, -100],
+        # },
+        # {
+        #     'name': 'Cliff',
+        #     'pos': [0, 2048, -300],
+        # },
+        {
+            'name': 'derby',
+            'pos': [2048, 2048, 0],
+        },
+        {
+            'name': 'driver_training',
+            'pos': [3071.5, 2047.5, 0],
+        },
+        # {
+        #     'name': 'east_coast_usa',
+        #     'pos': [0, 0, 0],
+        # },
+        {
+            'name': 'gridmap_v2',
+            'pos': [2047.5, -0.5, 0],
+        },
+        {
+            'name': 'Industrial',
+            'pos': [3072, 0, 0],
+        },
+        # {
+        #     'name': 'italy',
         #     'pos': [0, 0, 0],
         # },
         # {
-        #     'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\west_coast_usa.zip',
-        #     'name': 'west_coast_usa',
-        #     'pos': [0, 2000, 0],
+        #     'name': 'jungle_rock_island',
+        #     'pos': [0, 0, 0],
         # },
-        {
-            'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\Cliff.zip',
-            'name': 'Cliff',
-            'pos': [0, 0, 0],
-        },
-        {
-            'file': r'C:\Program Files (x86)\Steam\steamapps\common\BeamNG.drive\content\levels\east_coast_usa.zip',
-            'name': 'east_coast_usa',
-            'pos': [0, 0, 0],
-        },
+        # {
+        #     'name': 'small_island',
+        #     'pos': [0, 0, 0],
+        # },
+        # {
+        #     'name': 'Utah',
+        #     'pos': [0, 0, 0],
+        # },
+        # {
+        #     'name': 'west_coast_usa',
+        #     'pos': [-0.5, -0.5, 0],
+        # },
     ]
 
     main_json = jbeam.Jbeam()
@@ -91,8 +121,13 @@ def main():
     for merge_map in merge_maps:
         f.reset()
 
+        if 'file' not in merge_map:
+            merge_map['file'] = os.path.join(base_file_path, merge_map['name'] + '.zip')
+
         map_prefix = merge_map['name'] + '_'
         main_name = map_prefix + 'map'
+
+        print('merging', merge_map['name'], '...')
 
         main_json.lines.append({
             "name": main_name,
@@ -145,7 +180,7 @@ def main():
                         if tf[0] == '/':
                             tf = tf[1:]
 
-                        kwargs = {}
+                        kwargs = {'layer_names_prefix': map_prefix}
                         if 'position' in line:
                             kwargs['position'] = line['position']
                         if 'squareSize' in line:
@@ -158,20 +193,22 @@ def main():
                                 **kwargs
                             )
                         else:
-                            terrain = terrain.merge(
+                            terrain = Terrain.merge(
+                                terrain,
                                 Terrain().load(
                                     f.get_file_content(tf),
                                     **kwargs
                                 ),
+                                downscale=True,
                             )
 
                         del j.lines[i]
 
                     if 'nodes' in line:
-                        for i in range(len(line['nodes'])):
-                            line['nodes'][i][0] += merge_map['pos'][0]
-                            line['nodes'][i][1] += merge_map['pos'][1]
-                            line['nodes'][i][2] += merge_map['pos'][2]
+                        for i2 in range(len(line['nodes'])):
+                            line['nodes'][i2][0] += merge_map['pos'][0]
+                            line['nodes'][i2][1] += merge_map['pos'][1]
+                            line['nodes'][i2][2] += merge_map['pos'][2]
 
                     if '__parent' in line:
                         if line['__parent'] == 'MissionGroup':
@@ -193,6 +230,17 @@ def main():
             elif norm_filename.endswith(material_str):
                 j = jbeam.load(f.read_file(filename).decode('utf-8'))
                 fix_absolute_paths(j.lines, norm_filename)
+                for i in range(len(j.lines)):
+                    for k, v in j.lines[i].items():
+                        for name_value in [
+                            #'name',
+                            'internalName',
+                            'annotation',
+                            # 'groundmodelName',
+                            # 'groundType',
+                        ]:
+                            if name_value in v:
+                                j.lines[i][k][name_value] = map_prefix + v[name_value]
                 f.write_file(filename, j.tostring().encode('utf-8'))
                 f.save_file(
                     filename,
@@ -238,6 +286,8 @@ def main():
         "baseTexSize": terrain.size,
         "terrainFile": terrain_path,
     })
+
+    terrain.save()
 
     f.write_file(terrain_path, terrain.data)
     f.save_file(
