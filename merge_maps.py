@@ -4,6 +4,8 @@ import jbeam
 from file_manager import FileManager
 from terrain import Terrain
 import ntpath
+import cv2
+import numpy as np
 
 ALLOWED_EXTENSIONS = [
     '.cs',
@@ -74,11 +76,11 @@ def main():
     merge_maps = [
         # {
         #     'name': 'automation_test_track',
-        #     'pos': [-0.25, -0.25, -100],
+        #     'pos': [-0.25, -0.25, -1],
         # },
         # {
         #     'name': 'Cliff',
-        #     'pos': [0, 2048, -300],
+        #     'pos': [0, 2048, 0],
         # },
         # {
         #     'name': 'derby',
@@ -88,18 +90,18 @@ def main():
         #     'name': 'driver_training',
         #     'pos': [-0.5, -0.5, 0],
         # },
-        # {
-        #     'name': 'east_coast_usa',
-        #     'pos': [0, 0, 0],
-        # },
+        {
+            'name': 'east_coast_usa',
+            'pos': [4096, 0, 71],
+        },
         # {
         #     'name': 'gridmap_v2',
         #     'pos': [2047.5, -0.5, 0],
         # },
-        {
-            'name': 'hirochi_raceway',
-            'pos': [-0.375, -0.375, 0],
-        },
+        # {
+        #     'name': 'hirochi_raceway',
+        #     'pos': [-0.375, -0.375, 0],
+        # },
         # {
         #     'name': 'Industrial',
         #     'pos': [0, 0, 0],
@@ -120,11 +122,15 @@ def main():
         #     'name': 'Utah',
         #     'pos': [0, 0, 0],
         # },
-        # {
-        #     'name': 'west_coast_usa',
-        #     'pos': [-0.5, -0.5, 0],
-        # },
+        {
+            'name': 'west_coast_usa',
+            'pos': [-0.5, -0.5, 0],
+        },
     ]
+
+    base_tex_size = [2048, 2048]
+
+    build_new_terrain = True
 
     main_json = jbeam.Jbeam()
 
@@ -136,6 +142,9 @@ def main():
 
         if 'file' not in merge_map:
             merge_map['file'] = os.path.join(base_file_path, merge_map['name'] + '.zip')
+
+        keep_terrain_textures = []
+        switch_terrain_textures = []
 
         map_prefix = merge_map['name'] + '_'
         main_name = map_prefix + 'map'
@@ -188,7 +197,7 @@ def main():
                         line['position'][1] += merge_map['pos'][1]
                         line['position'][2] += merge_map['pos'][2]
 
-                    if line['class'] == 'TerrainBlock':
+                    if build_new_terrain and line['class'] == 'TerrainBlock':
                         tf = line['terrainFile']
                         if tf[0] == '/':
                             tf = tf[1:]
@@ -244,16 +253,58 @@ def main():
                 j = jbeam.load(f.read_file(filename).decode('utf-8'))
                 fix_absolute_paths(j.lines, norm_filename)
                 for i in range(len(j.lines)):
-                    for k, v in j.lines[i].items():
-                        for name_value in [
-                            #'name',
-                            'internalName',
-                            'annotation',
-                            # 'groundmodelName',
-                            # 'groundType',
-                        ]:
-                            if name_value in v:
-                                j.lines[i][k][name_value] = map_prefix + v[name_value]
+                    if build_new_terrain:
+                        for k, v in j.lines[i].items():
+                            if 'class' in v and v['class'] == 'TerrainMaterialTextureSet':
+                                print(v)
+                            for base_tex_name in [
+                                'aoBaseTex',
+                                'baseColorBaseTex',
+                                'heightBaseTex',
+                                'normalBaseTex',
+                                'roughnessBaseTex',
+                            ]:
+                                if base_tex_name in v:
+                                    tf = v[base_tex_name]
+                                    if tf[0] == '/':
+                                        tf = tf[1:]
+
+                                    if tf not in keep_terrain_textures:
+
+                                        new_tf = tf[len(map_str):]
+                                        if new_tf[0] == '/':
+                                            new_tf = new_tf[1:]
+
+                                        if tf not in switch_terrain_textures:
+                                            img = cv2.imdecode(np.frombuffer(f.read_file(tf), np.uint8), 1)
+                                            if img.shape[0] == base_tex_size[0] and img.shape[1] == base_tex_size[1]:
+                                                keep_terrain_textures.append(tf)
+                                            else:
+                                                switch_terrain_textures.append(tf)
+                                                res = cv2.resize(img,
+                                                                 dsize=(base_tex_size[0], base_tex_size[1]),
+                                                                 interpolation=cv2.INTER_AREA)
+                                                f.write_file(new_tf, cv2.imencode(new_tf, res)[1])
+                                                f.save_file(
+                                                    new_tf,
+                                                    new_art_folder,
+                                                    new_tf,
+                                                )
+                                                print('changing size:', new_tf)
+
+                                        # change path
+                                        j.lines[i][k][base_tex_name] = '/levels/' + base_map_name + '/art/' \
+                                                                       + merge_map['name'] + '/' + new_tf
+
+                            for name_value in [
+                                # 'name',
+                                'internalName',
+                                'annotation',
+                                # 'groundmodelName',
+                                # 'groundType',
+                            ]:
+                                if name_value in v:
+                                    j.lines[i][k][name_value] = map_prefix + v[name_value]
                 f.write_file(filename, j.tostring().encode('utf-8'))
                 f.save_file(
                     filename,
@@ -286,28 +337,59 @@ def main():
 
     f.reset()
 
-    terrain_path = 'levels/' + base_map_name + '/theTerrain.ter'
+    if build_new_terrain:
+        terrain_texture_set_name = base_map_name + 'TerrainTextureSet'
 
-    main_json.lines.append({
-        "name": "theTerrain",
-        "class": "TerrainBlock",
-        "persistentId": jbeam.create_persistent_id(),
-        "__parent": objects_path[-1],
-        "position": terrain.position,
-        "squareSize": terrain.square_size,
-        "maxHeight": terrain.max_height,
-        "baseTexSize": terrain.size,
-        "terrainFile": terrain_path,
-    })
+        terrain_texture_set_json = jbeam.Jbeam()
+        terrain_texture_set_json.lines.append({
+                terrain_texture_set_name: {
+                    "name": terrain_texture_set_name,
+                    "class": "TerrainMaterialTextureSet",
+                    "persistentId": jbeam.create_persistent_id(),
+                    "baseTexSize": base_tex_size,
+                    "detailTexSize": [
+                        1024,
+                        1024,
+                    ],
+                    "macroTexSize": [
+                        1024,
+                        1024,
+                    ]
+                },
+        })
 
-    terrain.save()
+        terrain_texture_set_json_path = 'art/main.materials.json'
 
-    f.write_file(terrain_path, terrain.data)
-    f.save_file(
-        terrain_path,
-        base_map_path,
-        terrain_path
-    )
+        f.write_file(terrain_texture_set_json_path, terrain_texture_set_json.tostring().encode('utf-8'))
+        f.save_file(
+            terrain_texture_set_json_path,
+            os.path.join(base_map_path, 'levels', base_map_name),
+            terrain_texture_set_json_path,
+        )
+
+        terrain_path = 'levels/' + base_map_name + '/theTerrain.ter'
+
+        main_json.lines.append({
+            "name": "theTerrain",
+            "class": "TerrainBlock",
+            "persistentId": jbeam.create_persistent_id(),
+            "__parent": objects_path[-1],
+            "materialTextureSet": terrain_texture_set_name,
+            "position": terrain.position,
+            "squareSize": terrain.square_size,
+            "maxHeight": terrain.max_height,
+            "baseTexSize": terrain.max_height,
+            "terrainFile": '/' + terrain_path,
+        })
+
+        terrain.save()
+
+        f.write_file(terrain_path, terrain.data)
+        f.save_file(
+            terrain_path,
+            base_map_path,
+            terrain_path
+        )
 
     main_path = os.path.join(*objects_path, 'items.level.json')
 
