@@ -55,6 +55,15 @@ def fix_absolute_paths(j, norm_filename):
 
 
 def main():
+    import shutil
+
+    for p in [
+        r'C:\Users\jack-\AppData\Local\BeamNG.drive\0.26\mods\unpacked\allmap\levels\allmap\main\MissionGroup',
+        r'C:\Users\jack-\AppData\Local\BeamNG.drive\0.26\mods\unpacked\allmap\levels\allmap\forest',
+        r'C:\Users\jack-\AppData\Local\BeamNG.drive\0.26\mods\unpacked\allmap\levels\allmap\art',
+    ]:
+        shutil.rmtree(p, ignore_errors=True)
+
     base_map_path = r'C:\Users\jack-\AppData\Local\BeamNG.drive\0.26\mods\unpacked\allmap'
     base_map_name = 'allmap'
 
@@ -71,26 +80,30 @@ def main():
         #     'name': 'Cliff',
         #     'pos': [0, 2048, -300],
         # },
-        {
-            'name': 'derby',
-            'pos': [2048, 2048, 0],
-        },
-        {
-            'name': 'driver_training',
-            'pos': [3071.5, 2047.5, 0],
-        },
+        # {
+        #     'name': 'derby',
+        #     'pos': [0, 0, 0],
+        # },
+        # {
+        #     'name': 'driver_training',
+        #     'pos': [-0.5, -0.5, 0],
+        # },
         # {
         #     'name': 'east_coast_usa',
         #     'pos': [0, 0, 0],
         # },
+        # {
+        #     'name': 'gridmap_v2',
+        #     'pos': [2047.5, -0.5, 0],
+        # },
         {
-            'name': 'gridmap_v2',
-            'pos': [2047.5, -0.5, 0],
+            'name': 'hirochi_raceway',
+            'pos': [-0.375, -0.375, 0],
         },
-        {
-            'name': 'Industrial',
-            'pos': [3072, 0, 0],
-        },
+        # {
+        #     'name': 'Industrial',
+        #     'pos': [0, 0, 0],
+        # },
         # {
         #     'name': 'italy',
         #     'pos': [0, 0, 0],

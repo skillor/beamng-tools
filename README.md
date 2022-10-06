@@ -12,6 +12,8 @@ east_coast_usa, 'position': [-1024, -1024, 0], 'max_height': 120
 
 gridmap_v2, 'position': [-1023.5, -1023.5, 50], 'max_height': 100
 
+hirochi_raceway, 'position': [-767.625, -767.625, 2.54999995], 'square_size': 0.75, 'max_height': 155
+
 Industrial, 'position': [-512, -512, 0], 'max_height': 100
 
 italy, 'position': [-2048, -2048, 100], 'max_height': 500
