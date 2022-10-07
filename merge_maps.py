@@ -93,7 +93,7 @@ def main():
         # },
         {
             'name': 'east_coast_usa',
-            'pos': [3072, 0, 71],
+            'pos': [2048, 0, 0],
         },
         # {
         #     'name': 'gridmap_v2',
@@ -109,7 +109,7 @@ def main():
         # },
         {
             'name': 'italy',
-            'pos': [0, 0, -100],
+            'pos': [0, 2048, 0],
         },
         # {
         #     'name': 'jungle_rock_island',
@@ -117,24 +117,31 @@ def main():
         # },
         # {
         #     'name': 'small_island',
-        #     'pos': [0, 0, 0],
+        #     'pos': [1000, 1000, 0],
         # },
         # {
         #     'name': 'Utah',
         #     'pos': [2048, 0, 0],
         # },
-        # {
-        #     'name': 'west_coast_usa',
-        #     'pos': [-0.5, -0.5, 0],
-        # },
+        {
+            'name': 'west_coast_usa',
+            'pos': [0, 0, 0],
+        },
     ]
+
+    with open('terrains.json', 'r') as f:
+        terrains_data = jbeam.load(f.read()).lines[0]
+    for merge_map in merge_maps:
+        if merge_map['name'] in terrains_data:
+            for i in range(3):
+                merge_map['pos'][i] -= terrains_data[merge_map['name']][i]
 
     base_tex_size = [2048, 2048]
     detail_tex_size = [1024, 1024]
     macro_tex_size = [1024, 1024]
 
     build_new_terrain = True
-    downscale_terrain = 4
+    scale_terrain = 1
 
     main_json = jbeam.Jbeam()
 
@@ -230,6 +237,7 @@ def main():
                                 f.get_file_content(tf),
                                 **kwargs
                             )
+                            terrain.set_square_size(scale_terrain)
                         else:
                             terrain = Terrain.merge(
                                 terrain,
@@ -237,7 +245,7 @@ def main():
                                     f.get_file_content(tf),
                                     **kwargs
                                 ),
-                                downscale=downscale_terrain,
+                                scale=scale_terrain,
                             )
 
                         del j.lines[i]
@@ -304,18 +312,19 @@ def main():
                                             img = cv2.imdecode(np.frombuffer(f.read_file(tf), np.uint8), 1)
                                             if img.shape[0] == base_tex_size[0] and img.shape[1] == base_tex_size[1]:
                                                 keep_terrain_textures.append(tf)
-                                            else:
-                                                switch_terrain_textures.append(tf)
-                                                res = cv2.resize(img,
-                                                                 dsize=(base_tex_size[0], base_tex_size[1]),
-                                                                 interpolation=cv2.INTER_AREA)
-                                                f.write_file(new_tf, cv2.imencode(new_tf, res)[1])
-                                                f.save_file(
-                                                    new_tf,
-                                                    new_art_folder,
-                                                    new_tf,
-                                                )
-                                                print('changing size:', new_tf)
+                                                continue
+
+                                            switch_terrain_textures.append(tf)
+                                            res = cv2.resize(img,
+                                                             dsize=(base_tex_size[0], base_tex_size[1]),
+                                                             interpolation=cv2.INTER_AREA)
+                                            f.write_file(new_tf, cv2.imencode(new_tf, res)[1])
+                                            f.save_file(
+                                                new_tf,
+                                                new_art_folder,
+                                                new_tf,
+                                            )
+                                            print('changing size:', new_tf)
 
                                         # change path
                                         j.lines[i][k][base_tex_name] = '/levels/' + base_map_name + '/art/' \
@@ -416,15 +425,13 @@ def main():
             "__parent": objects_path[-1],
             "materialTextureSet": terrain_texture_set_name,
             "position": terrain.position,
-            "squareSize": terrain.square_size,
-            "maxHeight": terrain.max_height,
-            "baseTexSize": terrain.size,
+            "squareSize": float(terrain.square_size),
+            "maxHeight": float(terrain.max_height),
+            "baseTexSize": int(terrain.size * terrain.square_size),
             "terrainFile": '/' + terrain_path,
         })
 
-        terrain.save()
-
-        f.write_file(terrain_path, terrain.data)
+        f.write_file(terrain_path, terrain.save())
         f.save_file(
             terrain_path,
             base_map_path,

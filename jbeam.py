@@ -53,8 +53,8 @@ class Jbeam:
             lines = []
         self.lines = lines
 
-    def tostring(self):
-        return '\n'.join([json.dumps(line) for line in self.lines])
+    def tostring(self, indent=None):
+        return '\n'.join([json.dumps(line, indent=indent) for line in self.lines])
 
 
 def load(s: str):
