@@ -17,6 +17,7 @@ jobs:
     - name: Build executables
       uses: JackMcKew/pyinstaller-action-windows@main
       with:
+        path: .
         spec: cleanup_mod.spec
     - name: Release executables
       uses: softprops/action-gh-release@v1
