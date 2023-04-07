@@ -40,7 +40,7 @@ def cleanup_mod(input_file, output_file, compression_level=9):
     f.save_zip(output_file, compression_level=compression_level)
 
 
-def main():
+def main(args):
     import argparse
     import pathlib
 
@@ -48,19 +48,20 @@ def main():
     parser.add_argument('input_path', type=pathlib.Path)
     parser.add_argument('output_path', type=pathlib.Path)
     parser.add_argument('-c', '--compression', type=int, default=9)
-    args = parser.parse_args()
+    parsed_args = parser.parse_args(args)
 
-    if os.path.isfile(args.input_path):
-        cleanup_mod(args.input_path, args.output_path, args.compression)
+    if os.path.isfile(parsed_args.input_path):
+        cleanup_mod(parsed_args.input_path, parsed_args.output_path, parsed_args.compression)
     else:
-        if not os.path.isdir(args.output_path):
-            os.mkdir(args.output_path)
-        for filename in os.listdir(args.input_path):
+        if not os.path.isdir(parsed_args.output_path):
+            os.mkdir(parsed_args.output_path)
+        for filename in os.listdir(parsed_args.input_path):
             # print(os.path.join(args.input_path, filename))
-            cleanup_mod(os.path.join(args.input_path, filename),
-                        os.path.join(args.output_path, filename),
-                        args.compression)
+            cleanup_mod(os.path.join(parsed_args.input_path, filename),
+                        os.path.join(parsed_args.output_path, filename),
+                        parsed_args.compression)
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    main(sys.argv[1:])
