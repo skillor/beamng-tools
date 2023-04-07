@@ -22,6 +22,6 @@ jobs:
     - name: Release executables
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/cleanup_mod.exe
+        files: dist/windows/cleanup_mod.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
