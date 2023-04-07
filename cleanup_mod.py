@@ -21,6 +21,7 @@ ALLOWED_EXTENSIONS = [
     '.sbeam',
     '.svg',
     '.ter',
+    '.ttf',
     '.wav',
 ]
 
@@ -33,7 +34,7 @@ def cleanup_mod(input_file, output_file, compression_level=9):
         file_base, file_extension = os.path.splitext(filename)
         file_extension = file_extension.lower()
         if file_extension not in ALLOWED_EXTENSIONS:
-            print(file_base, file_extension)
+            print("removing file", filename)
             f.delete_file(filename)
 
     f.save_zip(output_file, compression_level=compression_level)
@@ -49,11 +50,16 @@ def main():
     parser.add_argument('-c', '--compression', type=int, default=9)
     args = parser.parse_args()
 
-    if not os.path.isdir(args.output_path):
-        os.mkdir(args.output_path)
-    for filename in os.listdir(args.input_path):
-        print(os.path.join(args.input_path, filename))
-        cleanup_mod(os.path.join(args.input_path, filename), os.path.join(args.output_path, filename), args.compression)
+    if os.path.isfile(args.input_path):
+        cleanup_mod(args.input_path, args.output_path, args.compression)
+    else:
+        if not os.path.isdir(args.output_path):
+            os.mkdir(args.output_path)
+        for filename in os.listdir(args.input_path):
+            # print(os.path.join(args.input_path, filename))
+            cleanup_mod(os.path.join(args.input_path, filename),
+                        os.path.join(args.output_path, filename),
+                        args.compression)
 
 
 if __name__ == '__main__':
