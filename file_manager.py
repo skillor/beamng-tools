@@ -14,11 +14,22 @@ class FileManager:
     def filenames(self):
         return self.files.keys() | self.changed_files.keys()
 
-    def load_zip(self, file):
+    def load_zip(self, file, allow_override=True, throw_error=True):
+        success_files = set()
+        duplicate_files = set()
         zip_file = zipfile.ZipFile(file, 'r')
         for file in zip_file.infolist():
             if not file.is_dir():
-                self.files[file.filename] = (zip_file, file)
+                if (not allow_override) and (file.filename in self.files):
+                    if throw_error:
+                        raise FileExistsError('duplicate file: "{}"'.format(file.filename))
+                    duplicate_files.add(file.filename)
+                else:
+                    success_files.add(file.filename)
+                    self.files[file.filename] = (zip_file, file)
+        if duplicate_files:
+            return False, success_files, duplicate_files
+        return True, success_files, duplicate_files
 
     def load_dir(self, directory):
         for current_path, folders, files in os.walk(directory):
