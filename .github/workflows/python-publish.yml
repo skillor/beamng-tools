@@ -30,7 +30,7 @@ jobs:
       with:
         path: .
         spec: find_duplicate_mod.spec
-    - name: Release cleanup
+    - name: Release find duplicate
       uses: softprops/action-gh-release@v1
       with:
         files: dist/windows/find_duplicate_mod.exe
