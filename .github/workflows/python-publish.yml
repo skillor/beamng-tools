@@ -14,14 +14,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Build executables
+    - name: Build cleanup
       uses: JackMcKew/pyinstaller-action-windows@main
       with:
         path: .
         spec: cleanup_mod.spec
-    - name: Release executables
+    - name: Release cleanup
       uses: softprops/action-gh-release@v1
       with:
         files: dist/windows/cleanup_mod.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build find duplicate
+      uses: JackMcKew/pyinstaller-action-windows@main
+      with:
+        path: .
+        spec: find_duplicate_mod.spec
+    - name: Release cleanup
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/windows/find_duplicate_mod.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
